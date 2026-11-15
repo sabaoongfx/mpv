@@ -64,6 +64,8 @@ function M.new(opts)
     local api = {}
     function api.create_osd_overlay() return mp.overlay end
     function api.get_script_directory() return opts.dir end
+    -- mp.find_config_file: the scripts look for their icon data in the config folder as a fallback
+    function api.find_config_file(name) return opts.config and (opts.config .. "/" .. name) or nil end
     function api.get_property(name)
         local v = mp.props[name]
         if v == nil then return nil end
