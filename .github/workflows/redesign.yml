@@ -6,12 +6,12 @@ on:
   push:
     paths:
       - 'redesign/**'
-      - 'player/lua/osc.lua'
+      - 'player/lua/**'
       - '.github/workflows/redesign.yml'
   pull_request:
     paths:
       - 'redesign/**'
-      - 'player/lua/osc.lua'
+      - 'player/lua/**'
       - '.github/workflows/redesign.yml'
   workflow_dispatch:
 
@@ -43,3 +43,28 @@ jobs:
 
       - name: Colour contrast
         run: python3 redesign/tools/contrast.py
+
+  smoke:
+    # Builds mpv from this repository (the same container as upstream's Linux job, which has a
+    # libplacebo new enough for this mpv) and runs the bundle's headless smoke test.
+    runs-on: ubuntu-latest
+    container:
+      image: "registry.opensuse.org/home/mia/images/images/mpv-ci:stable-deps"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build mpv
+        run: |
+          meson setup build -Dtests=false
+          meson compile -C build
+
+      - name: Smoke test the bundle
+        run: python3 redesign/tests/smoke/ipc_smoke.py build/mpv redesign/bundle
+
+      - name: Upload mpv log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: juxt-smoke-log
+          path: /tmp/juxt-smoke-*/mpv.log
+          if-no-files-found: ignore
