@@ -60,6 +60,7 @@ local user_opts = {
     floatingwidth = 700,          -- width of the floating layout
     floatingalpha = 105,          -- alpha of the floating layout background
     tracknumberswidth = 35,       -- width for track number labels (0 = icon only)
+    juxt_title = true,            -- juxtopposed layout: show the title in the top strip (not when the window title bar shows it)
     greenandgrumpy = false,     -- disable santa hat
     chapter_fmt = "Chapter: %s", -- chapter print format for seekbar-hover. "no" to disable
     unicodeminus = false,       -- whether to use the Unicode minus sign character
@@ -3337,7 +3338,7 @@ local function juxt_bar_layout()
     lo.style = osc_styles.box
     lo.alpha[1] = user_opts.boxalpha
 
-    -- top strip: menu, home, title
+    -- top strip: menu, home, title (the title is skipped when the window title bar already shows it)
     geo = { x = top.x + padX + 4, y = line_top, an = 4, w = 28, h = BH }
     lo = add_layout("menu")
     lo.geometry = geo
@@ -3351,13 +3352,15 @@ local function juxt_bar_layout()
 
     local t_l = geo.x + geo.w + padX
     local t_r = top.x + top.w - padX
-    -- the title is centred in the strip, as in the prototype
-    geo = { x = (t_l + t_r) / 2, y = line_top, an = 5, w = math.max(0, t_r - t_l), h = 26 }
-    lo = add_layout("title")
-    lo.geometry = geo
-    lo.style = string.format("%s{\\clip(%f,%f,%f,%f)}",
-        osc_styles.vidtitleBar,
-        t_l, geo.y - geo.h, t_r, geo.y + geo.h)
+    if user_opts.juxt_title then
+        -- the title is centred in the strip, as in the prototype
+        geo = { x = (t_l + t_r) / 2, y = line_top, an = 5, w = math.max(0, t_r - t_l), h = 26 }
+        lo = add_layout("title")
+        lo.geometry = geo
+        lo.style = string.format("%s{\\clip(%f,%f,%f,%f)}",
+            osc_styles.vidtitleBar,
+            t_l, geo.y - geo.h, t_r, geo.y + geo.h)
+    end
 
     -- bottom bar, left to right: play (white pill), skip back, skip forward, previous, next, time
     local bx = bottom.x + padX
