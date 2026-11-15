@@ -1326,13 +1326,14 @@ end
 --
 
 -- ASS drawing (\p4: one unit = 1/8 px) for a list of flat x,y polygons
-local function juxt_poly_ass(polys, dx, dy)
+local function juxt_poly_ass(polys, dx, dy, k)
     local out = {}
+    k = k or 1
     for _, p in ipairs(polys) do
         local parts = {"m"}
         for i = 1, #p - 1, 2 do
             parts[#parts + 1] = string.format("%d %d",
-                math.floor((p[i] + dx) * 8 + 0.5), math.floor((p[i + 1] + dy) * 8 + 0.5))
+                math.floor((p[i] * k + dx) * 8 + 0.5), math.floor((p[i + 1] * k + dy) * 8 + 0.5))
             if i == 1 then parts[#parts + 1] = "l" end
         end
         out[#out + 1] = table.concat(parts, " ")
@@ -1341,18 +1342,19 @@ local function juxt_poly_ass(polys, dx, dy)
 end
 
 -- one icon, drawn at `scale` percent of its 24 px box; takes the element's colour
-local function juxt_icon(name, scale)
+-- dx moves the icon, in its own 24 unit box (the play and pause glyphs sit off-centre in the pill)
+local function juxt_icon(name, scale, dx)
     local polys = juxt_icon_polys[name]
     if not polys then return "" end
     return string.format("{\\fscx%d\\fscy%d\\p4}%s{\\p0}", scale, scale,
-        juxt_poly_ass(polys, 0, 0))
+        juxt_poly_ass(polys, dx or 0, 0))
 end
 
 juxt_build_icons = function()
     local function ic(n) return juxt_icon(n, 75) end
     return {
         menu = ic("menu"), prev = ic("prev"), next = ic("next"),
-        pause = ic("pause"), play = ic("play"), clock = ic("pause"),
+        pause = juxt_icon("pause", 75, -8), play = juxt_icon("play", 75, -8), clock = ic("pause"),
         play_backward = ic("prev"), skip_backward = ic("skip_backward"),
         skip_forward = ic("skip_forward"), chapter_prev = ic("prev"),
         chapter_next = ic("next"), audio = ic("audio"), subtitle = ic("subtitle"),
@@ -3246,12 +3248,13 @@ local function juxt_volume_content()
     end
     local colour = "&H" .. osc_color_convert(user_opts.buttons_color) .. "&"
     local speaker = muted and juxt_icon_polys.mute or juxt_icon_polys.volume
-    return string.format("{\\fscx75\\fscy75\\1c%s\\p4}%s{\\p0\\fscx100\\fscy100}",
-            colour, juxt_poly_ass(speaker, 0, 0))
-        .. string.format("{\\1c&H090909&\\p4}%s{\\p0}",
-            juxt_poly_ass(juxt_cone_polys.track, JUXT_CONE_SPEAKER_W, 0))
-        .. string.format("{\\1c%s\\p4}%s{\\p0}", colour,
-            juxt_poly_ass(fill, JUXT_CONE_SPEAKER_W, 0))
+    -- One drawing block for the whole control. libass moves the pen after each drawing block, so
+    -- separate blocks would shift the later ones (the wedge ran into the fullscreen button).
+    -- The speaker is scaled to 18 px here, not with \\fscx, so the wedge is not scaled too.
+    -- The speaker is centred on the 28 px row (its 24 px box at 0.75 starts 5 px down).
+    return string.format("{\\1c%s\\p4}%s %s{\\p0}", colour,
+        juxt_poly_ass(speaker, 0, 5, 0.75),
+        juxt_poly_ass(fill, JUXT_CONE_SPEAKER_W, 0))
 end
 
 -- click on the speaker toggles mute, click or drag on the wedge sets the volume
@@ -3372,7 +3375,7 @@ local function juxt_bar_layout()
     left_btn("playlist_prev", 32)
     left_btn("playlist_next", 32)
 
-    local tcW = 64
+    local tcW = 88
     geo = { x = bx, y = line2, an = 4, w = tcW, h = BH }
     lo = add_layout("tc_left")
     lo.geometry = geo
