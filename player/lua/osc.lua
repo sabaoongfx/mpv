@@ -1355,7 +1355,8 @@ end
 juxt_build_icons = function()
     local function ic(n) return juxt_icon(n, 75, 0, -6) end
     return {
-        menu = ic("menu"), prev = ic("prev"), next = ic("next"),
+        -- the top strip: the three dots sat 3 px low and the home icon 3 px high (measured)
+        menu = juxt_icon("menu", 75, 0, -10), prev = ic("prev"), next = ic("next"),
         pause = juxt_icon("pause", 75, -8, -6), play = juxt_icon("play", 75, -8, -6), clock = ic("pause"),
         play_backward = ic("prev"), skip_backward = ic("skip_backward"),
         skip_forward = juxt_icon("skip_forward", 75, 0, -2.5), chapter_prev = ic("prev"),
@@ -1364,7 +1365,7 @@ juxt_build_icons = function()
         mute = ic("mute"), volume = {ic("volume"), ic("volume"), ic("volume"), ic("volume")},
         fullscreen = ic("fullscreen"), exit_fullscreen = ic("exit_fullscreen"),
         close = "", minimize = "", maximize = "", unmaximize = "",
-        home = ic("home"),
+        home = juxt_icon("home", 75, 0, -2),
     }
 end
 
