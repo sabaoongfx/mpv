@@ -61,6 +61,26 @@ jobs:
       - name: Smoke test the bundle
         run: python3 redesign/tests/smoke/ipc_smoke.py build/mpv redesign/bundle
 
+      - name: Install display and capture tools
+        run: zypper --non-interactive install xorg-x11-server ffmpeg
+
+      - name: Start Xvfb (1280x720)
+        run: |
+          setsid Xvfb :99 -screen 0 1280x720x24 -nolisten tcp > /tmp/xvfb.log 2>&1 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+          sleep 3
+
+      - name: Screenshot check
+        run: python3 redesign/tests/smoke/screens.py build/mpv redesign/bundle screenshots
+
+      - name: Upload screenshots
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: juxt-screenshots
+          path: screenshots/
+          if-no-files-found: ignore
+
       - name: Upload mpv log
         if: ${{ always() }}
         uses: actions/upload-artifact@v4

@@ -42,45 +42,56 @@ def wait_for_socket(path, proc, timeout=20):
     return False
 
 
+def prepare(config, work):
+    """Copy the bundle into a throwaway config folder, the same files the install steps copy."""
+    cfg_root = os.path.join(work, "config")
+    mpv_dir = os.path.join(cfg_root, "mpv")
+    os.makedirs(os.path.join(mpv_dir, "script-opts"), exist_ok=True)
+    os.makedirs(os.path.join(mpv_dir, "scripts"), exist_ok=True)
+    for name, dst in (("mpv.conf", os.path.join(mpv_dir, "mpv.conf")),
+                      ("osc.conf", os.path.join(mpv_dir, "script-opts", "osc.conf"))):
+        src = os.path.join(config, name)
+        if os.path.exists(src):
+            with open(src, "rb") as f, open(dst, "wb") as g:
+                g.write(f.read())
+    for name in os.listdir(os.path.join(config, "scripts")):
+        if name.endswith(".lua"):
+            with open(os.path.join(config, "scripts", name), "rb") as f, \
+                    open(os.path.join(mpv_dir, "scripts", name), "wb") as g:
+                g.write(f.read())
+    return cfg_root
+
+
+def start(mpv, config, work, extra_args, msg_level):
+    """Start mpv with the bundle installed; returns (process, socket path, log path)."""
+    sock = os.path.join(work, "mpv.sock")
+    log = os.path.join(work, "mpv.log")
+    cfg_root = prepare(config, work)
+    env = dict(os.environ, XDG_CONFIG_HOME=cfg_root, XDG_STATE_HOME=os.path.join(work, "state"))
+    proc = subprocess.Popen([
+        mpv, "--idle=yes", "--no-terminal", f"--input-ipc-server={sock}", f"--log-file={log}",
+        f"--msg-level={msg_level}", *extra_args,
+    ], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if not wait_for_socket(sock, proc):
+        proc.kill()
+        raise RuntimeError("mpv did not open its IPC socket")
+    return proc, sock, log
+
+
+MSG_LEVEL = ("all=warn,osc=debug,juxtopposed_menu=debug,"
+             "juxtopposed_home=debug,juxtopposed_icons=debug")
+
+
 def main():
     if len(sys.argv) != 3:
         print(__doc__)
         return 2
     mpv, config = sys.argv[1], sys.argv[2]
     work = tempfile.mkdtemp(prefix="juxt-smoke-")
-    sock = os.path.join(work, "mpv.sock")
-    log = os.path.join(work, "mpv.log")
-    cfg_root = os.path.join(work, "config")
-    os.makedirs(os.path.join(cfg_root, "mpv"))
-    for name in ("mpv.conf", "osc.conf"):
-        src = os.path.join(config, name)
-        if os.path.exists(src):
-            os.makedirs(os.path.join(cfg_root, "mpv", "script-opts" if name == "osc.conf" else ""), exist_ok=True)
-            dst = (os.path.join(cfg_root, "mpv", "script-opts", name) if name == "osc.conf"
-                   else os.path.join(cfg_root, "mpv", name))
-            with open(src, "rb") as f, open(dst, "wb") as g:
-                g.write(f.read())
-    scripts_src = os.path.join(config, "scripts")
-    scripts_dst = os.path.join(cfg_root, "mpv", "scripts")
-    os.makedirs(scripts_dst, exist_ok=True)
-    for name in os.listdir(scripts_src):
-        if name.endswith(".lua"):
-            with open(os.path.join(scripts_src, name), "rb") as f, \
-                    open(os.path.join(scripts_dst, name), "wb") as g:
-                g.write(f.read())
-
-    env = dict(os.environ, XDG_CONFIG_HOME=cfg_root, XDG_STATE_HOME=os.path.join(work, "state"))
-    proc = subprocess.Popen([
-        mpv, "--idle=yes", "--vo=null", "--ao=null", "--no-terminal",
-        f"--input-ipc-server={sock}", f"--log-file={log}",
-        "--msg-level=all=warn,osc=debug,juxtopposed_menu=debug,juxtopposed_home=debug,juxtopposed_icons=debug",
-    ], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
     failures = []
+    proc, sock, log = start(mpv, config, work,
+                            ["--vo=null", "--ao=null"], MSG_LEVEL)
     try:
-        if not wait_for_socket(sock, proc):
-            print("mpv did not open its IPC socket")
-            return 1
         time.sleep(1)
         # Home (idle), the Home menu, then a file with the player bar and the player menu
         send(sock, ["script-message", "juxt-menu-home"])
