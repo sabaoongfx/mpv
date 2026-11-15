@@ -1343,21 +1343,24 @@ end
 
 -- one icon, drawn at `scale` percent of its 24 px box; takes the element's colour
 -- dx moves the icon, in its own 24 unit box (the play and pause glyphs sit off-centre in the pill)
-local function juxt_icon(name, scale, dx)
+-- dy moves it too: libass places the drawing from the text baseline, which sits the glyphs low in
+-- the 28 px buttons (measured: the pause glyph was 6.5 px below the centre of the pill)
+local function juxt_icon(name, scale, dx, dy)
     local polys = juxt_icon_polys[name]
     if not polys then return "" end
     return string.format("{\\fscx%d\\fscy%d\\p4}%s{\\p0}", scale, scale,
-        juxt_poly_ass(polys, dx or 0, 0))
+        juxt_poly_ass(polys, dx or 0, dy or 0))
 end
 
 juxt_build_icons = function()
-    local function ic(n) return juxt_icon(n, 75) end
+    local function ic(n) return juxt_icon(n, 75, 0, -6) end
     return {
         menu = ic("menu"), prev = ic("prev"), next = ic("next"),
-        pause = juxt_icon("pause", 75, -8), play = juxt_icon("play", 75, -8), clock = ic("pause"),
+        pause = juxt_icon("pause", 75, -8, -6), play = juxt_icon("play", 75, -8, -6), clock = ic("pause"),
         play_backward = ic("prev"), skip_backward = ic("skip_backward"),
-        skip_forward = ic("skip_forward"), chapter_prev = ic("prev"),
-        chapter_next = ic("next"), audio = ic("audio"), subtitle = ic("subtitle"),
+        skip_forward = juxt_icon("skip_forward", 75, 0, -2.5), chapter_prev = ic("prev"),
+        chapter_next = ic("next"), audio = juxt_icon("audio", 75, 0, -2.5),
+        subtitle = juxt_icon("subtitle", 75, 0, -2.5),
         mute = ic("mute"), volume = {ic("volume"), ic("volume"), ic("volume"), ic("volume")},
         fullscreen = ic("fullscreen"), exit_fullscreen = ic("exit_fullscreen"),
         close = "", minimize = "", maximize = "", unmaximize = "",
@@ -3252,9 +3255,13 @@ local function juxt_volume_content()
     -- separate blocks would shift the later ones (the wedge ran into the fullscreen button).
     -- The speaker is scaled to 18 px here, not with \\fscx, so the wedge is not scaled too.
     -- The speaker is centred on the 28 px row (its 24 px box at 0.75 starts 5 px down).
-    return string.format("{\\1c%s\\p4}%s %s{\\p0}", colour,
+    -- Two zero-area points at the corners of the whole control keep the drawing's bounding box fixed,
+    -- so the speaker does not move as the wedge changes size.
+    local x_end = math.floor((JUXT_CONE_SPEAKER_W + JUXT_CONE_W) * 8 + 0.5)
+    local anchors = string.format(" m 0 0 l 0 0 m %d %d l %d %d", x_end, 28 * 8, x_end, 28 * 8)
+    return string.format("{\\1c%s\\p4}%s %s%s{\\p0}", colour,
         juxt_poly_ass(speaker, 0, 5, 0.75),
-        juxt_poly_ass(fill, JUXT_CONE_SPEAKER_W, 0))
+        juxt_poly_ass(fill, JUXT_CONE_SPEAKER_W, 0), anchors)
 end
 
 -- click on the speaker toggles mute, click or drag on the wedge sets the volume

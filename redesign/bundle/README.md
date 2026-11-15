@@ -15,6 +15,7 @@ The bundle is the config and scripts for the juxtopposed look in mpv. Two parts 
 | `scripts/juxtopposed-icons.lua` | `~/.config/mpv/scripts/` | `scripts\` |
 | `scripts/juxtopposed-menu.lua` | `~/.config/mpv/scripts/` | `scripts\` |
 | `scripts/juxtopposed-home.lua` | `~/.config/mpv/scripts/` | `scripts\` |
+| `scripts/juxtopposed-start.lua` | `~/.config/mpv/scripts/` | `scripts\` |
 
 ## Build mpv from this repository
 
@@ -36,7 +37,7 @@ If the bar shows the classic layout, the config or the build is not the one you 
 
 ## What the bundle does
 
-- **Bar:** one opaque bar. Top row: menu (three dots), Home, title. Control row: play, back 10 s,
+- **Bar:** the bar shows for 10 seconds when a file starts, then hides until the mouse moves. One opaque bar. Top row: menu (three dots), Home, title. Control row: play, back 10 s,
   forward 10 s, previous, next, time, seek bar, time, audio, subtitles, volume cone, fullscreen.
 - **Menu:** the three dots open the player menu. Keys: Up and Down move, Enter or Right opens, Left or
   Esc goes back. Click, or hover and click.

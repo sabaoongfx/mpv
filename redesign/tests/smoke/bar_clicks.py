@@ -55,6 +55,11 @@ def main():
     def prop(name):
         return json.loads(send(sock, ["get_property", name])).get("data")
 
+    def show():
+        # the bar hides 10 s after a file starts (juxtopposed-start.lua), so show it before each section
+        send(sock, ["script-message", "osc-visibility", "always"])
+        time.sleep(1.0)
+
     def check(name, ok, detail=""):
         results.append((name, bool(ok), detail))
 
@@ -74,6 +79,7 @@ def main():
         p2 = prop("pause")
         check("play/pause toggles", p1 != p0 and p2 == p0, f"pause {p0} -> {p1} -> {p2}")
 
+        show()
         # skip back and forward 10 s (start at 30 s so the skip back is not clamped at 0)
         send(sock, ["seek", 30, "absolute"])
         time.sleep(1)
@@ -90,6 +96,7 @@ def main():
         check("skip forward 10 s", t3 is not None and t2 is not None and t3 > t2 + 7,
               f"{t2:.1f} -> {t3:.1f}")
 
+        show()
         # seek bar: half way along the bar
         dur = prop("duration")
         click(*SEEK)
@@ -99,6 +106,7 @@ def main():
         check("seek bar click", dur and t4 is not None and abs(t4 - frac * dur) < 4,
               f"expected about {frac * dur:.0f} s, got {t4:.1f} s (duration {dur:.0f} s)")
 
+        show()
         # playlist next and previous
         i0 = prop("playlist-pos")
         click(*NEXT)
@@ -110,6 +118,7 @@ def main():
         check("playlist next and previous", i1 == i0 + 1 and i2 == i0,
               f"playlist-pos {i0} -> {i1} -> {i2}")
 
+        show()
         # volume: the cone sets it, the speaker mutes
         click(*CONE_HALF)
         v = prop("volume")
@@ -121,6 +130,7 @@ def main():
         m2 = prop("mute")
         check("speaker mutes and unmutes", m1 != m0 and m2 == m0, f"mute {m0} -> {m1} -> {m2}")
 
+        show()
         # fullscreen
         f0 = prop("fullscreen")
         click(*FULLSCREEN)
@@ -131,6 +141,7 @@ def main():
         f2 = prop("fullscreen")
         check("fullscreen button", f1 != f0 and f2 == f0, f"fullscreen {f0} -> {f1} -> {f2}")
 
+        show()
         # audio and subtitle buttons open their track menus (checked by a screenshot of the card)
         click(*AUDIO)
         time.sleep(1)
@@ -143,6 +154,7 @@ def main():
         time.sleep(1)
         click(*OFF_BAR)
 
+        show()
         # top row: the three-dot menu
         click(*MENU)
         time.sleep(1)
@@ -155,6 +167,7 @@ def main():
         share, _ = pixel_stats(raw, 12, 300, 260, 640, (24, 24, 24), 6)
         check("a click outside closes the menu", share < 0.1, f"{share:.2f} of the card still shown")
 
+        show()
         # Home button: stops playback and shows Home
         click(*HOME_BTN)
         time.sleep(1.5)
