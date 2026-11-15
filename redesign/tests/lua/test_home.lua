@@ -164,4 +164,12 @@ tests[#tests + 1] = { "the Home button's message shows the view again", function
     assert(has(mp.overlay.data, "Continue Watching"), "juxt-home did not show the view")
 end }
 
+tests[#tests + 1] = { "the window title is Home while Home shows, and the file's title comes back", function()
+    local mp = stub.load(SCRIPT, { dir = SCRIPT_DIR, props = { ["options/title"] = "${media-title}" } })
+    stub.observe(mp, "idle-active", true)
+    assert(mp.props["options/title"] == "Home", "title should be Home on idle")
+    stub.observe(mp, "idle-active", false)
+    assert(mp.props["options/title"] == "${media-title}", "the usual title template should come back")
+end }
+
 return tests

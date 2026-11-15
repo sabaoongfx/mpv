@@ -61,6 +61,31 @@ local function poly_ass(polys, ox, oy, k)
     return table.concat(out, " ")
 end
 
+-- Thumbnail colours, as in the prototype: a gradient from hsl(hue, 30%, 22%) to hsl(hue, 22%, 10%),
+-- where the hue comes from the file name. mpv has no frame previews here, so the gradient stands in.
+local function hsl_rgb(h, sat, l)
+    local c = (1 - math.abs(2 * l - 1)) * sat
+    local hp = (h / 60) % 6
+    local x = c * (1 - math.abs(hp % 2 - 1))
+    local r, g, b = 0, 0, 0
+    if hp < 1 then r, g, b = c, x, 0
+    elseif hp < 2 then r, g, b = x, c, 0
+    elseif hp < 3 then r, g, b = 0, c, x
+    elseif hp < 4 then r, g, b = 0, x, c
+    elseif hp < 5 then r, g, b = x, 0, c
+    else r, g, b = c, 0, x end
+    local m = l - c / 2
+    return (r + m) * 255, (g + m) * 255, (b + m) * 255
+end
+
+local function thumb_colours(path)
+    local hue = 0
+    for i = 1, #path do hue = (hue * 31 + path:byte(i)) % 360 end
+    local r1, g1, b1 = hsl_rgb(hue, 0.30, 0.22)
+    local r2, g2, b2 = hsl_rgb(hue, 0.22, 0.10)
+    return { r1, g1, b1 }, { r2, g2, b2 }
+end
+
 local function rect_ass(x, y, w, h)
     return string.format("m %d %d l %d %d %d %d %d %d",
         r8(x), r8(y), r8(x + w), r8(y), r8(x + w), r8(y + h), r8(x), r8(y + h))
@@ -237,7 +262,13 @@ local function render()
                 rect(COL_FG, 16 * s, ry, 2 * s, ROW_H * s) -- white marker: the selection
             end
             local tw, th = (is_audio and 40 or 72) * s, 40 * s
-            rect(COL_PANEL, 24 * s, ry + 8 * s, tw, th)
+            -- thumbnail: the gradient in two halves, from the top colour to the bottom colour (BGR for ASS)
+            local c1, c2 = thumb_colours(row.path)
+            -- two halves: the top in the gradient's first colour, the bottom in its second
+            local function hex(c) return string.format("%02X%02X%02X", math.floor(c[3] + 0.5), math.floor(c[2] + 0.5), math.floor(c[1] + 0.5)) end
+            local half = th / 2
+            rect(hex(c1), 24 * s, ry + 8 * s, tw, half + 1) -- +1: no seam between the halves
+            rect(hex(c2), 24 * s, ry + 8 * s + half, tw, half)
             local tx = 24 * s + tw + 14 * s
             text(tx, ry + 18 * s, 15 * s, COL_FG, 4, ass_text(row.title))
             text(tx, ry + 38 * s, 13 * s, COL_DIM, 4, ass_text(shorten(row.path, 72)))
@@ -338,8 +369,18 @@ mp.observe_property("mouse-pos", "native", function(_, pos)
 end)
 
 mp.observe_property("osd-dimensions", "native", function() if st.shown then render() end end)
+-- the window title says Home while Home shows, and goes back to the usual title when a file plays
+local title_option = mp.get_property("options/title")
 mp.observe_property("idle-active", "bool", function(_, idle)
-    if idle then show() else hide() end
+    if idle then
+        show()
+        -- the option, not the property: mpv rewrites the title when it stops, which would undo a property
+        mp.set_property("options/title", "Home")
+    else
+        hide()
+        -- set the option (the template), so mpv expands it again with the file's name
+        if title_option then mp.set_property("options/title", title_option) end
+    end
 end)
 
 mp.register_script_message("juxt-home", function() show() end)
