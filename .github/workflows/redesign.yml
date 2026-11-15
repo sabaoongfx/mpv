@@ -1,0 +1,45 @@
+name: redesign
+
+# Tests and checks for the juxtopposed redesign (redesign/). Runs when those files change.
+
+on:
+  push:
+    paths:
+      - 'redesign/**'
+      - 'player/lua/osc.lua'
+      - '.github/workflows/redesign.yml'
+  pull_request:
+    paths:
+      - 'redesign/**'
+      - 'player/lua/osc.lua'
+      - '.github/workflows/redesign.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Lua 5.4
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4
+
+      - name: Lua syntax
+        run: |
+          luac5.4 -p player/lua/osc.lua redesign/bundle/scripts/*.lua redesign/tests/lua/*.lua
+
+      - name: Lua tests
+        run: cd redesign/tests/lua && lua5.4 run.lua
+
+      - name: Python tests
+        # the icon drift checks skip here: the VLC redesign tree is not part of this repository
+        run: python3 -m unittest discover -s redesign/tests/python -v
+
+      - name: Colour contrast
+        run: python3 redesign/tools/contrast.py
