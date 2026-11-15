@@ -43,7 +43,7 @@ local COL_DIM = "8F8F8F"
 local osd = mp.create_osd_overlay("ass-events")
 osd.z = -10 -- under the OSC bar, which is drawn at z 0
 
-local st = { shown = false, sel = 1, hover = nil, rows = {}, dots = nil, continue = {}, listen = {} }
+local st = { thumb = {}, shown = false, sel = 1, hover = nil, rows = {}, dots = nil, continue = {}, listen = {} }
 local move, enter, click -- defined below; used by the key bindings
 
 local function r8(v) return math.floor(v * 8 + 0.5) end
@@ -217,12 +217,109 @@ local function play(row)
     mp.commandv("loadfile", row.path, "replace")
 end
 
+-- Video thumbnails, as in VLC: a frame at 15% of the video, made with ffmpeg and cached as raw BGRA.
+-- They are drawn with overlay-add (ids 40..63). Audio rows keep the gradient.
+local THUMB_W, THUMB_H = 144, 80
+local OV_FIRST, OV_LAST = 40, 63
+local THUMB_VF = "scale=144:80:force_original_aspect_ratio=decrease,pad=144:80:(ow-iw)/2:(oh-ih)/2:color=black"
+st.overlays_on = {}   -- id -> true while drawn
+st.overlay_key = ""   -- what was last drawn, so an unchanged Home is not re-sent
+
+local function thumb_dir()
+    local base = os.getenv("XDG_CACHE_HOME")
+    if not base or base == "" then base = (os.getenv("HOME") or ".") .. "/.cache" end
+    return base .. "/mpv-juxtopposed/thumbs"
+end
+
+local function thumb_file(path)
+    local h1, h2 = 5381, 0
+    for i = 1, #path do
+        local c = path:byte(i)
+        h1 = (h1 * 33 + c) % 4294967296
+        h2 = (h2 * 31 + c) % 4294967296
+    end
+    return string.format("%s/%08x%08x.bgra", thumb_dir(), h1, h2)
+end
+
+local function file_size(name)
+    local f = io.open(name, "rb")
+    if not f then return nil end
+    local size = f:seek("end")
+    f:close()
+    return size
+end
+
+-- st.thumb[path]: "pending", "ready" (file on disk) or "none" (no frame; the gradient stays)
+local function request_thumb(path)
+    if st.thumb[path] then return end
+    local file = thumb_file(path)
+    if file_size(file) == THUMB_W * THUMB_H * 4 then
+        st.thumb[path] = "ready"
+        return
+    end
+    st.thumb[path] = "pending"
+    local function done(state)
+        st.thumb[path] = state
+        if st.shown and st.redraw then st.redraw() end
+    end
+    mp.command_native_async({ name = "subprocess", capture_stdout = true, playback_only = false,
+        args = { "ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path } },
+        function(ok, res)
+            local dur = ok and res and res.status == 0 and tonumber((res.stdout or ""):match("%d+%.?%d*"))
+            if not dur or dur <= 0 then return done("none") end
+            mp.command_native_async({ name = "subprocess", capture_stdout = true, playback_only = false,
+                args = { "ffmpeg", "-v", "error", "-ss", string.format("%.3f", dur * 0.15), "-i", path,
+                    "-frames:v", "1", "-vf", THUMB_VF, "-f", "rawvideo", "-pix_fmt", "bgra", "-" } },
+                function(ok2, res2)
+                    local data = res2 and res2.stdout
+                    if not ok2 or not data or res2.status ~= 0 or #data ~= THUMB_W * THUMB_H * 4 then
+                        return done("none")
+                    end
+                    mp.command_native({ name = "subprocess", args = { "mkdir", "-p", thumb_dir() },
+                        playback_only = false })
+                    local out = io.open(file, "wb")
+                    if not out then return done("none") end
+                    out:write(data)
+                    out:close()
+                    done("ready")
+                end)
+        end)
+end
+
+-- Draw the thumbnails placed this frame and remove the ones no longer shown.
+local function sync_overlays(placed)
+    local keys = {}
+    for _, p in ipairs(placed) do
+        keys[#keys + 1] = string.format("%d:%d:%d:%d:%d", p.id, p.x, p.y, p.w, p.h)
+    end
+    local key = table.concat(keys, "|")
+    if key == st.overlay_key then return end
+    st.overlay_key = key
+    local now = {}
+    for _, p in ipairs(placed) do
+        now[p.id] = true
+        mp.commandv("overlay-add", tostring(p.id), tostring(p.x), tostring(p.y),
+            thumb_file(p.path), "0", "bgra", tostring(THUMB_W), tostring(THUMB_H), tostring(THUMB_W * 4),
+            tostring(p.w), tostring(p.h))
+    end
+    for id in pairs(st.overlays_on) do
+        if not now[id] then mp.commandv("overlay-remove", tostring(id)) end
+    end
+    st.overlays_on = now
+end
+
+local function clear_overlays()
+    st.overlay_key = ""
+    sync_overlays({})
+end
+
 local function render()
     if not st.shown then return end
     local w, h = window_size()
     local s = h / 720
     osd.res_x, osd.res_y = w, h
     local out = {}
+    local placed = {} -- thumbnails drawn this frame (see sync_overlays)
     local function rect(col, x, y, rw, rh)
         out[#out + 1] = string.format("{\\an7\\pos(0,0)\\1c&H%s&\\p4}%s{\\p0}", col, rect_ass(x, y, rw, rh))
     end
@@ -233,7 +330,7 @@ local function render()
     rect(COL_BG, 0, 0, w, h)
 
     -- header
-    text(24 * s, 30 * s, 19 * s, COL_FG, 4, "{\\b1}Home")
+    text(24 * s, 30 * s, 26 * s, COL_FG, 4, "{\\b1}Home")
     st.dots = { x = w - 24 * s - 30 * s, y = 16 * s, w = 30 * s, h = 30 * s }
     local dots = st.dots
     if st.hover == "dots" then rect(COL_HOVER, dots.x, dots.y, dots.w, dots.h) end
@@ -247,10 +344,10 @@ local function render()
     st.rows = {}
     local y = 80 * s
     local function section(title, list, is_audio, first_index)
-        text(24 * s, y, 16 * s, COL_FG, 4, "{\\b1}" .. ass_text(title))
-        y = y + 30 * s
+        text(24 * s, y, 24 * s, COL_FG, 4, "{\\b1}" .. ass_text(title))
+        y = y + 36 * s
         if #list == 0 then
-            text(24 * s, y + 14 * s, 14 * s, COL_DIM, 4, "Nothing here yet")
+            text(24 * s, y + 14 * s, 20 * s, COL_DIM, 4, "Nothing here yet")
             y = y + 44 * s
             return
         end
@@ -262,7 +359,15 @@ local function render()
                 rect(COL_FG, 16 * s, ry, 2 * s, ROW_H * s) -- white marker: the selection
             end
             local tw, th = (is_audio and 40 or 72) * s, 40 * s
-            -- thumbnail: the gradient in two halves, from the top colour to the bottom colour (BGR for ASS)
+            if not is_audio and row.path then
+                request_thumb(row.path)
+                if st.thumb[row.path] == "ready" and placed and #placed < (OV_LAST - OV_FIRST + 1) then
+                    placed[#placed + 1] = { id = OV_FIRST + #placed, path = row.path,
+                        x = math.floor(24 * s), y = math.floor(ry + 8 * s),
+                        w = math.floor(tw), h = math.floor(th) }
+                end
+            end
+            -- gradient (under the thumbnail, and the fallback for audio and files without a frame): from the top colour to the bottom colour (BGR for ASS)
             local c1, c2 = thumb_colours(row.path)
             -- two halves: the top in the gradient's first colour, the bottom in its second
             local function hex(c) return string.format("%02X%02X%02X", math.floor(c[3] + 0.5), math.floor(c[2] + 0.5), math.floor(c[1] + 0.5)) end
@@ -270,10 +375,10 @@ local function render()
             rect(hex(c1), 24 * s, ry + 8 * s, tw, half + 1) -- +1: no seam between the halves
             rect(hex(c2), 24 * s, ry + 8 * s + half, tw, half)
             local tx = 24 * s + tw + 14 * s
-            text(tx, ry + 18 * s, 15 * s, COL_FG, 4, ass_text(row.title))
-            text(tx, ry + 38 * s, 13 * s, COL_DIM, 4, ass_text(shorten(row.path, 72)))
+            text(tx, ry + 18 * s, 22 * s, COL_FG, 4, ass_text(row.title))
+            text(tx, ry + 38 * s, 18 * s, COL_DIM, 4, ass_text(shorten(row.path, 72)))
             if row.at then
-                text(w - 24 * s, ry + ROW_H * s / 2, 13 * s, COL_DIM, 6,
+                text(w - 24 * s, ry + ROW_H * s / 2, 18 * s, COL_DIM, 6,
                     "Resume at " .. clock(row.at))
             end
             st.rows[#st.rows + 1] = { idx = idx, x0 = 16 * s, x1 = w - 16 * s, y0 = ry, y1 = ry + ROW_H * s }
@@ -286,13 +391,16 @@ local function render()
     section("Listen Again", st.listen, true, #st.continue + 1)
 
     if #rows == 0 then
-        text(24 * s, y + 4 * s, 14 * s, COL_DIM, 4,
+        text(24 * s, y + 4 * s, 20 * s, COL_DIM, 4,
             "Play something and it will show up here. Open a file with the menu.")
     end
 
+    sync_overlays(placed)
     osd.data = table.concat(out, "\n")
     osd:update()
 end
+
+st.redraw = function() if st.shown then render() end end
 
 local function show()
     if st.shown then return end
@@ -313,6 +421,7 @@ local function hide()
     for _, name in ipairs({ "juxt-home-up", "juxt-home-down", "juxt-home-enter", "juxt-home-click" }) do
         mp.remove_key_binding(name)
     end
+    clear_overlays()
     osd.data = ""
     osd:update()
 end
