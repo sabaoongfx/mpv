@@ -149,9 +149,33 @@ mp.register_script_message("juxt-open-files", function()
         end
     end)
 end)
+-- mpv cannot play a folder, so the media files in it are queued, in name order (as VLC does)
+local MEDIA_EXT = { mkv = true, mp4 = true, avi = true, mov = true, webm = true, m4v = true, ts = true,
+    mpg = true, mpeg = true, wmv = true, flv = true, ogv = true, vob = true,
+    flac = true, mp3 = true, ogg = true, oga = true, opus = true, m4a = true, wav = true, aac = true,
+    wma = true, aiff = true, ape = true }
+
+local function folder_media(dir)
+    local files = {}
+    local listing = utils.readdir(dir, "files") or {}
+    for _, name in ipairs(listing) do
+        local ext = name:match("%.([^%.]+)$")
+        if ext and MEDIA_EXT[ext:lower()] then files[#files + 1] = utils.join_path(dir, name) end
+    end
+    table.sort(files)
+    return files
+end
+
 mp.register_script_message("juxt-open-folder", function()
     pick("folder", function(paths)
-        mp.commandv("loadfile", paths[1], "replace")
+        local files = folder_media(paths[1])
+        if #files == 0 then
+            mp.osd_message("No media files in that folder")
+            return
+        end
+        for i, f in ipairs(files) do
+            mp.commandv("loadfile", f, i == 1 and "replace" or "append-play")
+        end
     end)
 end)
 

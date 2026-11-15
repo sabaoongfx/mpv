@@ -72,6 +72,7 @@ function M.new(opts)
         return tostring(v)
     end
     function api.get_property_native(name) return mp.props[name] end
+    function api.add_periodic_timer(interval, fn) return { kill = function() end } end
     function api.set_property(name, value) mp.props[name] = value; mp.set_log = mp.set_log or {}; table.insert(mp.set_log, name .. "=" .. tostring(value)) end
     -- mpv runs `script-message name` by calling the script's handler for that name
     local function dispatch(name)

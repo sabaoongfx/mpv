@@ -494,6 +494,15 @@ mp.observe_property("idle-active", "bool", function(_, idle)
     end
 end)
 
+-- mpv saves the resume position only on quit, and removes it when the file starts again. So while a
+-- local file plays, its position is written every 5 s: Continue Watching keeps the file after Home or
+-- stop, as VLC does.
+mp.add_periodic_timer(5, function()
+    if mp.get_property_bool("idle-active") then return end
+    local path = mp.get_property("path")
+    if path and is_local(path) then mp.command("write-watch-later-config") end
+end)
+
 mp.register_script_message("juxt-home", function() show() end)
 mp.register_script_message("juxt-home-refresh", function()
     if st.shown then load_lists() render() end
