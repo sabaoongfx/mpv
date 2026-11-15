@@ -13,6 +13,7 @@ The PNGs go to the output folder given on the command line, so they can be uploa
 Usage: screens.py <mpv binary> <config dir> <output dir>
 """
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -70,14 +71,15 @@ def main():
                             ["--vo=x11", "--ao=null", "--force-window=yes", "--geometry=1280x720+0+0"],
                             MSG_LEVEL)
     try:
+        send(sock, ["script-message", "juxt-home"])
         time.sleep(3)
         raw = capture(display, os.path.join(out, "home.png"))
         share, light = pixel_stats(raw, 0, 0, W, H, (14, 14, 14), 8)
         checks.append(("home background drawn", share >= 0.7, f"{share:.2f} of the screen"))
 
+        # keep it playing: a paused x11 output may not redraw the overlays
         send(sock, ["loadfile", "av://lavfi:testsrc2=size=1280x720:rate=25", "replace"])
         time.sleep(3)
-        send(sock, ["set_property", "pause", True])
         send(sock, ["script-message", "osc-visibility", "always"])
         time.sleep(2)
         raw = capture(display, os.path.join(out, "player.png"))
@@ -104,6 +106,7 @@ def main():
     for name, ok, detail in checks:
         print(f"{'ok  ' if ok else 'FAIL'} {name}: {detail}")
         failed += 0 if ok else 1
+    shutil.copy(log, os.path.join(out, "mpv.log"))
     print(f"log: {log}")
     print(f"screenshots: {out}")
     return 1 if failed else 0
