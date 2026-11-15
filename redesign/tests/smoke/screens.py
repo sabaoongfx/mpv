@@ -90,7 +90,7 @@ def main():
         send(sock, ["script-message", "juxt-menu"])
         time.sleep(2)
         raw = capture(display, os.path.join(out, "menu.png"))
-        share, _ = pixel_stats(raw, 12, 200, 260, 600, (24, 24, 24), 6)
+        share, _ = pixel_stats(raw, 12, 50, 260, 420, (24, 24, 24), 6)
         checks.append(("player menu card drawn", share >= 0.5, f"{share:.2f} of the card"))
 
         send(sock, ["quit"])

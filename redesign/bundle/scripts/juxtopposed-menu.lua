@@ -182,9 +182,12 @@ local function layout()
     for _, it in ipairs(t.items) do
         card_h = card_h + (it.sep and sep_h or row_h)
     end
+    -- the player menu opens under its button in the top strip (top left); the Home menu under the
+    -- three dots (top right)
     local x = 10 * s
-    local bottom = h - 56 * s - 8 * s -- above the bottom bar
-    local y = math.max(0, bottom - card_h)
+    if st.anchor == "top-right" then x = w - card_w - 10 * s end
+    local y = 44 * s
+    if st.anchor == "bottom" then y = math.max(0, h - 56 * s - 8 * s - card_h) end
     local rows, cy = {}, y + pad
     for i, it in ipairs(t.items) do
         local rh = it.sep and sep_h or row_h
@@ -241,7 +244,10 @@ local function render()
     osd:update()
 end
 
+local anchors = { player = "top-left", home = "top-right" }
+
 local function open(name)
+    st.anchor = anchors[name] or "top-left"
     st.stack = { { items = menus[name], sel = 0 } }
     local t = top()
     t.sel = first_selectable(t.items)

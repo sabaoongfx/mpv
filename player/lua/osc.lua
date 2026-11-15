@@ -3314,7 +3314,10 @@ local function juxt_bar_layout()
     local line2 = bottom.y + BAR_H / 2          -- centre of the bottom bar
 
     osc_param.areas = {}
-    add_area("input", 0, 0, osc_param.playresx, osc_param.playresy)
+    -- mouse bindings are only taken over the strip and the bar, so the wheel and clicks over the video
+    -- reach mpv's own bindings (volume with the wheel); the whole window still shows the bar
+    add_area("input", 0, 0, osc_param.playresx, TOP_H)
+    add_area("input", 0, bottom.y, osc_param.playresx, osc_param.playresy)
     add_area("showhide", 0, 0, osc_param.playresx, osc_param.playresy)
 
     local lo, geo
@@ -4364,14 +4367,20 @@ local function render()
     local function update_input_area(area_name, visible, enabled_key, enable_fn)
         local areas = osc_param.areas[area_name]
         if not areas then return end
-        for _,cords in ipairs(areas) do
-            if visible then
-                set_virt_mouse_area(cords.x1, cords.y1, cords.x2, cords.y2, area_name)
+        -- mpv keeps one mouse rectangle per name, so with several areas (juxtopposed: the top strip
+        -- and the bottom bar) use the one under the mouse, or the last one
+        local chosen = areas[#areas]
+        for _, cords in ipairs(areas) do
+            if mouse_hit_coords(cords.x1, cords.y1, cords.x2, cords.y2) then
+                chosen = cords
             end
-            if visible ~= state[enabled_key] then
-                if visible then enable_fn() else mp.disable_key_bindings(area_name) end
-                state[enabled_key] = visible
-            end
+        end
+        if visible then
+            set_virt_mouse_area(chosen.x1, chosen.y1, chosen.x2, chosen.y2, area_name)
+        end
+        if visible ~= state[enabled_key] then
+            if visible then enable_fn() else mp.disable_key_bindings(area_name) end
+            state[enabled_key] = visible
         end
     end
 

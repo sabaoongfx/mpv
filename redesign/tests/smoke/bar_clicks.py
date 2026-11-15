@@ -35,7 +35,10 @@ OFF_BAR = (600, 300)       # the video, to close menus
 
 
 def click(x, y):
-    subprocess.run(["xdotool", "mousemove", str(x), str(y), "click", "1"], check=True)
+    # move first and let the OSC update its mouse area, then click (a person moves, then clicks)
+    subprocess.run(["xdotool", "mousemove", str(x), str(y)], check=True)
+    time.sleep(0.4)
+    subprocess.run(["xdotool", "click", "1"], check=True)
     time.sleep(0.7)
 
 
@@ -159,12 +162,12 @@ def main():
         click(*MENU)
         time.sleep(1)
         raw = capture(display, os.path.join(out, "menu.png"))
-        share, _ = pixel_stats(raw, 12, 300, 260, 640, (24, 24, 24), 6)
+        share, _ = pixel_stats(raw, 12, 50, 260, 420, (24, 24, 24), 6)
         check("menu button opens the player menu", share > 0.5, f"{share:.2f} of the card")
         click(*OFF_BAR)
         time.sleep(0.5)
         raw = capture(display, os.path.join(out, "menu-closed.png"))
-        share, _ = pixel_stats(raw, 12, 300, 260, 640, (24, 24, 24), 6)
+        share, _ = pixel_stats(raw, 12, 50, 260, 420, (24, 24, 24), 6)
         check("a click outside closes the menu", share < 0.1, f"{share:.2f} of the card still shown")
 
         show()
@@ -181,7 +184,7 @@ def main():
         click(1241, 31)
         time.sleep(1)
         raw = capture(display, os.path.join(out, "home-menu.png"))
-        share, _ = pixel_stats(raw, 12, 300, 260, 640, (24, 24, 24), 6)
+        share, _ = pixel_stats(raw, 1012, 46, 1268, 290, (24, 24, 24), 6)
         check("Home three dots open the Home menu", share > 0.5, f"{share:.2f} of the card")
 
         send(sock, ["quit"])
