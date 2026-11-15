@@ -309,8 +309,10 @@ local function sync_overlays(placed)
 end
 
 local function clear_overlays()
+    -- remove every thumbnail drawn (sync_overlays skips unchanged frames, so it cannot be used here)
+    for id in pairs(st.overlays_on) do mp.commandv("overlay-remove", tostring(id)) end
+    st.overlays_on = {}
     st.overlay_key = ""
-    sync_overlays({})
 end
 
 local function render()
