@@ -3297,10 +3297,10 @@ end
 -- seek bar, time, audio, subtitles, volume wedge, fullscreen). No cache text, no window controls.
 -- Sizes follow redesign/prototype.html: top 40 px, bottom 55 px, buttons 28 px tall, play pill 54x28.
 local function juxt_bar_layout()
-    local BAR_H = 55
-    local TOP_H = 40
+    local BAR_H = 44   -- was 55 (the prototype's bottom bar)
+    local TOP_H = 32   -- was 40
     local padX = 10
-    local BH = 28
+    local BH = 24      -- control buttons, was 28
     local bottom = {
         x = -2,
         an = 7,
@@ -3354,7 +3354,7 @@ local function juxt_bar_layout()
     local t_r = top.x + top.w - padX
     if user_opts.juxt_title then
         -- the title is centred in the strip, as in the prototype
-        geo = { x = (t_l + t_r) / 2, y = line_top, an = 5, w = math.max(0, t_r - t_l), h = 26 }
+        geo = { x = (t_l + t_r) / 2, y = line_top, an = 5, w = math.max(0, t_r - t_l), h = 22 }
         lo = add_layout("title")
         lo.geometry = geo
         lo.style = string.format("%s{\\clip(%f,%f,%f,%f)}",
