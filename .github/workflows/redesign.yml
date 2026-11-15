@@ -62,7 +62,7 @@ jobs:
         run: python3 redesign/tests/smoke/ipc_smoke.py build/mpv redesign/bundle
 
       - name: Install display and capture tools
-        run: zypper --non-interactive install xorg-x11-server ffmpeg
+        run: zypper --non-interactive install xorg-x11-server ffmpeg fontconfig dejavu-fonts
 
       - name: Start Xvfb (1280x720)
         run: |
