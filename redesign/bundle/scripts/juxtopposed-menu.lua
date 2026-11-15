@@ -157,8 +157,10 @@ end)
 
 local function top() return st.stack[#st.stack] end
 
+local function selectable(it) return not (it.sep or it.header) end
+
 local function first_selectable(items)
-    for i, it in ipairs(items) do if not it.sep then return i end end
+    for i, it in ipairs(items) do if selectable(it) then return i end end
     return 1
 end
 
@@ -175,7 +177,7 @@ local function layout()
     local t = top()
     local w, h = window_size()
     local s = h / 720
-    local card_w = CARD_W * s
+    local card_w = (st.width or CARD_W) * s
     local pad = PAD * s
     local row_h = ROW_H * s
     local sep_h = SEP_H * s
@@ -188,11 +190,12 @@ local function layout()
     local x = 10 * s
     if st.anchor == "top-right" then x = w - card_w - 10 * s end
     local y = 44 * s
-    if st.anchor == "bottom" then y = math.max(0, h - 56 * s - 8 * s - card_h) end
+    if st.anchor == "bottom" or st.anchor == "bottom-right" then y = math.max(0, h - 44 * s - 8 * s - card_h) end
+    if st.anchor == "bottom-right" then x = w - card_w - 16 * s end
     local rows, cy = {}, y + pad
     for i, it in ipairs(t.items) do
         local rh = it.sep and sep_h or row_h
-        rows[i] = { y0 = cy, y1 = cy + rh, sep = it.sep }
+        rows[i] = { y0 = cy, y1 = cy + rh, sep = it.sep, header = it.header }
         cy = cy + rh
     end
     return { x = x, y = y, w = card_w, h = card_h, pad = pad, row_h = row_h, s = s, rows = rows }
@@ -217,6 +220,9 @@ local function render()
         if it.sep then
             out[#out + 1] = string.format("{\\an7\\pos(0,0)\\1c&H%s&\\p4}%s{\\p0}", COL_LINE,
                 rect_ass(L.x + 12 * L.s, ry + 4 * L.s, L.w - 24 * L.s, math.max(1, L.s)))
+        elseif it.header then
+            out[#out + 1] = string.format("{\\an4\\pos(%f,%f)\\fs%f\\1c&H%s&}%s",
+                L.x + 12 * L.s, ry + L.row_h / 2, 12 * L.s, COL_DIM, it.label)
         else
             local cy = ry + L.row_h / 2
             if st.hover == i then
@@ -239,6 +245,10 @@ local function render()
                 out[#out + 1] = string.format("{\\an6\\pos(%f,%f)\\fs%f\\1c&H%s&}›",
                     L.x + L.w - 12 * L.s, cy, 16 * L.s, COL_DIM)
             end
+            if it.checked then
+                out[#out + 1] = string.format("{\\an6\\pos(%f,%f)\\fs%f\\1c&H%s&}✓",
+                    L.x + L.w - 14 * L.s, cy, 15 * L.s, COL_FG)
+            end
         end
     end
     osd.data = table.concat(out, "\n")
@@ -247,9 +257,11 @@ end
 
 local anchors = { player = "top-left", home = "top-right" }
 
-local function open(name)
-    st.anchor = anchors[name] or "top-left"
-    st.stack = { { items = menus[name], sel = 0 } }
+-- Open a menu with the given items (and the anchor it opens at).
+local function open_items(items, anchor, width)
+    st.anchor = anchor or "top-left"
+    st.width = width
+    st.stack = { { items = items, sel = 0 } }
     local t = top()
     t.sel = first_selectable(t.items)
     st.hover = t.sel -- show the keyboard selection straight away
@@ -263,6 +275,103 @@ local function open(name)
     render()
 end
 
+local function open(name)
+    open_items(menus[name], anchors[name])
+end
+
+-- The audio and subtitle popups (as in the VLC design): tracks with a check on the current one,
+-- then the output devices (audio) or Add subtitles (subtitles). Built from mpv's lists each time.
+local function track_list(kind)
+    local out = {}
+    for _, t in ipairs(mp.get_property_native("track-list") or {}) do
+        if t.type == kind then out[#out + 1] = t end
+    end
+    return out
+end
+
+local function track_label(t)
+    local name = t.title or t.lang or ("track " .. t.id)
+    if t.lang and t.title then name = t.title .. " [" .. t.lang .. "]" end
+    return name
+end
+
+-- Long names are cut to fit the card (about 7 px per character at 14 px text).
+local function fit(text, max_chars)
+    -- braces and backslashes would be read as ASS tags
+    text = tostring(text or ""):gsub("[{}\\]", "")
+    if #text <= max_chars then return text end
+    return text:sub(1, max_chars - 3) .. "..."
+end
+
+-- The popups must fit above the bar: at most this many rows (height of the window minus the bar).
+local function max_popup_rows()
+    local _, h = window_size()
+    local s = h / 720
+    local room = h - 44 * s - 16 * s - 44 * s -- bar, gaps, and the top strip
+    return math.max(4, math.floor((room - 2 * PAD * s) / (ROW_H * s)))
+end
+
+-- Keeps the current item in a capped list: the first (max - 1) items, plus the current one.
+local function cap_list(items, current_index, max)
+    if #items <= max then return items end
+    local out = {}
+    for i = 1, max - 1 do out[i] = items[i] end
+    if current_index > max - 1 then out[max] = items[current_index] else out[max] = items[max] end
+    return out
+end
+
+local function audio_items()
+    local items = { { header = true, label = "Audio track" } }
+    for _, t in ipairs(track_list("audio")) do
+        local id = t.id
+        items[#items + 1] = { label = fit(track_label(t), 40), checked = t.selected,
+            fn = function() mp.set_property_number("aid", id) end }
+    end
+    if #items == 1 then items[#items + 1] = { label = "No audio tracks", fn = function() end } end
+    items[#items + 1] = { header = true, label = "Output device" }
+    local current = mp.get_property("audio-device")
+    local devices = {}
+    local current_index = 0
+    for _, d in ipairs(mp.get_property_native("audio-device-list") or {}) do
+        local name = d.name
+        devices[#devices + 1] = { label = fit(d.description or name, 40), checked = name == current,
+            fn = function() mp.set_property("audio-device", name) end }
+        if name == current then current_index = #devices end
+    end
+    -- the header row and the track rows come first; the device list fills the rest
+    local room = max_popup_rows() - #items
+    for _, d in ipairs(cap_list(devices, current_index, math.max(1, room))) do items[#items + 1] = d end
+    return items
+end
+
+local function subs_items()
+    local items = { { header = true, label = "Subtitle track" } }
+    local off = mp.get_property("sid") == "no" or mp.get_property("sid") == nil
+    items[#items + 1] = { label = "Off", checked = off, fn = function() mp.set_property("sid", "no") end }
+    for _, t in ipairs(track_list("sub")) do
+        local id = t.id
+        items[#items + 1] = { label = fit(track_label(t), 40), checked = t.selected,
+            fn = function() mp.set_property_number("sid", id) end }
+    end
+    items[#items + 1] = { sep = true }
+    items[#items + 1] = { label = "Add subtitles…", icon = "m_file",
+        fn = function()
+            pick("file", function(paths)
+                for _, p in ipairs(paths) do mp.commandv("sub-add", p, "select") end
+            end)
+        end }
+    return items
+end
+
+mp.register_script_message("juxt-menu-audio", function()
+    if #st.stack > 0 then return close() end
+    open_items(audio_items(), "bottom-right", 320)
+end)
+mp.register_script_message("juxt-menu-subs", function()
+    if #st.stack > 0 then return close() end
+    open_items(subs_items(), "bottom-right", 320)
+end)
+
 move = function(step)
     local t = top()
     if not t then return end
@@ -270,7 +379,7 @@ move = function(step)
     local i = t.sel
     for _ = 1, n do
         i = ((i - 1 + step) % n) + 1
-        if not t.items[i].sep then break end
+        if selectable(t.items[i]) then break end
     end
     t.sel = i
     st.hover = i
@@ -281,10 +390,13 @@ activate = function(i)
     local t = top()
     if not t then return end
     local it = t.items[i]
-    if not it or it.sep then return end
+    if not it or not selectable(it) then return end
     if it.sub then
         st.stack[#st.stack + 1] = { items = it.sub, sel = first_selectable(it.sub) }
         render()
+    elseif it.fn then
+        close()
+        it.fn()
     else
         close()
         run(it.cmd)
@@ -305,7 +417,7 @@ click = function()
         return close()
     end
     for i, r in ipairs(L.rows) do
-        if not r.sep and my >= r.y0 and my < r.y1 then
+        if not r.sep and not r.header and my >= r.y0 and my < r.y1 then
             return activate(i)
         end
     end
@@ -315,7 +427,7 @@ mp.observe_property("mouse-pos", "native", function(_, pos)
     if #st.stack == 0 or not st.card or not pos then return end
     local hover
     for i, r in ipairs(st.card.rows) do
-        if not r.sep and pos.y >= r.y0 and pos.y < r.y1 and pos.x >= st.card.x and pos.x <= st.card.x + st.card.w then
+        if not r.sep and not r.header and pos.y >= r.y0 and pos.y < r.y1 and pos.x >= st.card.x and pos.x <= st.card.x + st.card.w then
             hover = i
         end
     end

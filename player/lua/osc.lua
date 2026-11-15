@@ -3835,7 +3835,8 @@ local function osc_init()
     --sub_track
     ne = new_element("sub_track", "button")
 
-    ne.enabled = state.sub_track_count > 0
+    -- juxtopposed always offers the subtitle popup (it has Add subtitles), as the design does
+    ne.enabled = state.sub_track_count > 0 or user_opts.layout == "juxtopposed"
     ne.content = function ()
         if user_opts.tracknumberswidth == 0 then
             return icons.subtitle
