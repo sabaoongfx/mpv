@@ -3281,72 +3281,92 @@ local function juxt_bind_volume(el)
     end
 end
 
--- juxtopposed: one bar, two rows. Top row: menu, home, title. Control row: play, skip,
--- previous and next, time, seek bar, time, audio, subtitles, volume cone, fullscreen.
--- No cache text, no window controls (see redesign/PLAN.md).
+-- juxtopposed: a top strip (menu, home, title) and a bottom bar (play, skip, previous and next, time,
+-- seek bar, time, audio, subtitles, volume wedge, fullscreen). No cache text, no window controls.
+-- Sizes follow redesign/prototype.html: top 40 px, bottom 55 px, buttons 28 px tall, play pill 54x28.
 local function juxt_bar_layout()
-    local h = 56
+    local BAR_H = 55
+    local TOP_H = 40
     local padX = 10
     local BH = 28
-    local osc_geo = {
+    local bottom = {
         x = -2,
         an = 7,
         w = osc_param.playresx + 4,
-        h = h,
+        h = BAR_H,
     }
-    osc_geo.y = osc_param.playresy - (h - 2 + user_opts.barmargin)
-    osc_param.video_margins.b = osc_geo.h / osc_param.playresy
+    bottom.y = osc_param.playresy - (BAR_H - 2 + user_opts.barmargin)
+    local top = { x = -2, y = 0, an = 7, w = osc_param.playresx + 4, h = TOP_H }
+    osc_param.video_margins.b = BAR_H / osc_param.playresy
+    osc_param.video_margins.t = TOP_H / osc_param.playresy
 
-    local line1 = osc_geo.y + 12 -- top row
-    local line2 = osc_geo.y + 39 -- control row
+    local line_top = TOP_H / 2                  -- centre of the top strip
+    local line2 = bottom.y + BAR_H / 2          -- centre of the bottom bar
 
     osc_param.areas = {}
-    add_area("input", get_hitbox_coords(osc_geo.x, osc_geo.y, osc_geo.an,
-                                        osc_geo.w, osc_geo.h))
-    add_area("showhide", 0,
-             get_align(-1 + (2 * user_opts.deadzonesize), osc_geo.y, 0, 0),
-             osc_param.playresx, osc_param.playresy - user_opts.barmargin)
+    add_area("input", 0, 0, osc_param.playresx, osc_param.playresy)
+    add_area("showhide", 0, 0, osc_param.playresx, osc_param.playresy)
 
     local lo, geo
 
-    new_element("bgbox", "box")
-    lo = add_layout("bgbox")
-    lo.geometry = osc_geo
+    new_element("topbg", "box")
+    lo = add_layout("topbg")
+    lo.geometry = top
     lo.layer = 10
     lo.style = osc_styles.box
     lo.alpha[1] = user_opts.boxalpha
 
-    -- top row: menu, home, title
-    geo = { x = osc_geo.x + padX, y = line1, an = 4, w = 28, h = 26 }
+    new_element("bgbox", "box")
+    lo = add_layout("bgbox")
+    lo.geometry = bottom
+    lo.layer = 10
+    lo.style = osc_styles.box
+    lo.alpha[1] = user_opts.boxalpha
+
+    -- top strip: menu, home, title
+    geo = { x = top.x + padX + 4, y = line_top, an = 4, w = 28, h = BH }
     lo = add_layout("menu")
     lo.geometry = geo
     lo.style = osc_styles.topButtonsBar
     lo.hitbox = { x1 = 0 }
 
-    geo = { x = geo.x + geo.w + 4, y = line1, an = 4, w = 28, h = 26 }
+    geo = { x = geo.x + geo.w + 4, y = line_top, an = 4, w = 28, h = BH }
     lo = add_layout("home")
     lo.geometry = geo
     lo.style = osc_styles.topButtonsBar
 
     local t_l = geo.x + geo.w + padX
-    local t_r = osc_geo.x + osc_geo.w - padX
-    geo = { x = t_l, y = line1, an = 4, w = math.max(0, t_r - t_l), h = 26 }
+    local t_r = top.x + top.w - padX
+    -- the title is centred in the strip, as in the prototype
+    geo = { x = (t_l + t_r) / 2, y = line_top, an = 5, w = math.max(0, t_r - t_l), h = 26 }
     lo = add_layout("title")
     lo.geometry = geo
     lo.style = string.format("%s{\\clip(%f,%f,%f,%f)}",
         osc_styles.vidtitleBar,
-        geo.x, geo.y - geo.h, geo.x + geo.w, geo.y + geo.h)
+        t_l, geo.y - geo.h, t_r, geo.y + geo.h)
 
-    -- control row, left to right
-    local bx = osc_geo.x + padX
-    local function left_btn(name, w)
+    -- bottom bar, left to right: play (white pill), skip back, skip forward, previous, next, time
+    local bx = bottom.x + padX
+    geo = { x = bx + 27, y = line2, an = 5, w = 54, h = BH }
+    new_element("playbg", "box") -- the pill behind the play icon
+    lo = add_layout("playbg")
+    lo.geometry = geo
+    lo.layer = 12
+    lo.style = "{\\rDefault\\blur0\\bord0\\1c&HFFFFFF&}"
+    lo.alpha[1] = 0
+    lo.box.radius = 6
+
+    local function left_btn(name, w, style)
         geo = { x = bx, y = line2, an = 4, w = w, h = BH }
         lo = add_layout(name)
         lo.geometry = geo
-        lo.style = osc_styles.smallButtonsBar
+        lo.style = style or osc_styles.smallButtonsBar
         bx = bx + w + 6
     end
-    left_btn("play_pause", 54)
+    -- the play icon is dark on the white pill
+    left_btn("play_pause", 54, osc_styles.smallButtonsBar .. "{\\1c&H111111&}")
+    -- centre the play icon and the pill in the 54 px pill
+    lo.geometry = { x = bottom.x + padX + 27, y = line2, an = 5, w = 54, h = BH }
     left_btn("skip_backward", 32)
     left_btn("skip_forward", 32)
     left_btn("playlist_prev", 32)
@@ -3359,8 +3379,8 @@ local function juxt_bar_layout()
     lo.style = osc_styles.timecodesBar
     local sb_l = bx + tcW + 6
 
-    -- control row, right to left
-    local rx = osc_geo.x + osc_geo.w - padX
+    -- right to left: fullscreen, volume wedge, subtitles, audio, time
+    local rx = bottom.x + bottom.w - padX
     local function right_btn(name, w)
         rx = rx - w
         geo = { x = rx, y = line2, an = 4, w = w, h = BH }
