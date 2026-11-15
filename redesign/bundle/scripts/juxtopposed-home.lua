@@ -208,7 +208,7 @@ local function render()
     rect(COL_BG, 0, 0, w, h)
 
     -- header
-    text(24 * s, 30 * s, 18 * s, COL_FG, 4, "Home")
+    text(24 * s, 30 * s, 19 * s, COL_FG, 4, "{\\b1}Home")
     st.dots = { x = w - 24 * s - 30 * s, y = 16 * s, w = 30 * s, h = 30 * s }
     local dots = st.dots
     if st.hover == "dots" then rect(COL_HOVER, dots.x, dots.y, dots.w, dots.h) end
@@ -222,10 +222,10 @@ local function render()
     st.rows = {}
     local y = 80 * s
     local function section(title, list, is_audio, first_index)
-        text(24 * s, y, 15 * s, COL_FG, 4, ass_text(title))
+        text(24 * s, y, 16 * s, COL_FG, 4, "{\\b1}" .. ass_text(title))
         y = y + 30 * s
         if #list == 0 then
-            text(24 * s, y + 14 * s, 13 * s, COL_DIM, 4, "Nothing here yet")
+            text(24 * s, y + 14 * s, 14 * s, COL_DIM, 4, "Nothing here yet")
             y = y + 44 * s
             return
         end
@@ -239,10 +239,10 @@ local function render()
             local tw, th = (is_audio and 40 or 72) * s, 40 * s
             rect(COL_PANEL, 24 * s, ry + 8 * s, tw, th)
             local tx = 24 * s + tw + 14 * s
-            text(tx, ry + 18 * s, 14 * s, COL_FG, 4, ass_text(row.title))
-            text(tx, ry + 38 * s, 12 * s, COL_DIM, 4, ass_text(shorten(row.path, 72)))
+            text(tx, ry + 18 * s, 15 * s, COL_FG, 4, ass_text(row.title))
+            text(tx, ry + 38 * s, 13 * s, COL_DIM, 4, ass_text(shorten(row.path, 72)))
             if row.at then
-                text(w - 24 * s, ry + ROW_H * s / 2, 12 * s, COL_DIM, 6,
+                text(w - 24 * s, ry + ROW_H * s / 2, 13 * s, COL_DIM, 6,
                     "Resume at " .. clock(row.at))
             end
             st.rows[#st.rows + 1] = { idx = idx, x0 = 16 * s, x1 = w - 16 * s, y0 = ry, y1 = ry + ROW_H * s }

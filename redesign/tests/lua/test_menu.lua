@@ -78,10 +78,8 @@ end }
 tests[#tests + 1] = { "a click on a row runs it", function()
     local mp = load()
     stub.message(mp, "juxt-menu")
-    -- The card sits above the bar: bottom = 720 - 56 - 8, height = padding + rows + separators.
-    -- Player menu: 10 rows of 32 px and 4 separators of 9 px, padding 4 px top and bottom.
-    local card_h = 8 + 10 * 32 + 4 * 9
-    local card_y = 720 - 56 - 8 - card_h
+    -- The player menu opens under its button in the top strip: top at 44 px.
+    local card_y = 44
     mp.props["mouse-pos"] = { x = 100, y = card_y + 4 + 16 }
     stub.key(mp, "juxt-menu-click")
     assert(mp.commands[#mp.commands] == "cycle pause", "clicking the first row should play/pause, got " .. tostring(mp.commands[#mp.commands]))
@@ -105,11 +103,16 @@ tests[#tests + 1] = { "a command with ';' runs as two mpv commands", function()
     assert(mp.commands[n] == "loadfile ${clipboard/text}", "second command: " .. tostring(mp.commands[n]))
 end }
 
-tests[#tests + 1] = { "without zenity or kdialog, Open File(s) says so and loads nothing", function()
-    local mp = load()
+tests[#tests + 1] = { "Open File(s) asks the desktop file chooser helper and plays what it returns", function()
+    local mp = stub.load(SCRIPT, { dir = SCRIPT_DIR, pick_stdout = "/media/a.mkv\n/media/b.mkv\n",
+        props = { ["mouse-pos"] = { x = 0, y = 0 } } })
     stub.message(mp, "juxt-menu-home")
     stub.key(mp, "juxt-menu-enter") -- Open File(s)
-    assert(#mp.osd_messages == 1 and has(mp.osd_messages[1], "No file dialog"), "expected the no-dialog message")
+    local call = mp.async_calls[1]
+    assert(call and call.args[1] == "python3" and call.args[2]:match("juxt%-pick%-file%.py$") and call.args[3] == "file",
+        "expected the helper to be called in file mode")
+    assert(mp.commands[#mp.commands - 1] == "loadfile|/media/a.mkv|replace", "first file should replace")
+    assert(mp.commands[#mp.commands] == "loadfile|/media/b.mkv|append-play", "second file should append")
 end }
 
 return tests

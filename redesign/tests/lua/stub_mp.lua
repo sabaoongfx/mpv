@@ -65,7 +65,7 @@ function M.new(opts)
     function api.create_osd_overlay() return mp.overlay end
     function api.get_script_directory() return opts.dir end
     -- mp.find_config_file: the scripts look for their icon data in the config folder as a fallback
-    function api.find_config_file(name) return opts.config and (opts.config .. "/" .. name) or nil end
+    function api.find_config_file(name) return (opts.config or "/fake/config") .. "/" .. name end
     function api.get_property(name)
         local v = mp.props[name]
         if v == nil then return nil end
@@ -98,6 +98,13 @@ function M.new(opts)
         return nil
     end
     function api.osd_message(text) table.insert(mp.osd_messages, text) end
+    -- async subprocess: record the call; the test can supply a result through opts.pick_stdout
+    mp.async_calls = {}
+    function api.command_native_async(args, cb)
+        table.insert(mp.async_calls, args)
+        local stdout = opts.pick_stdout or ""
+        cb(true, { status = opts.pick_status or 0, stdout = stdout })
+    end
     function api.register_script_message(name, fn) mp.handlers[name] = fn end
     function api.observe_property(name, _, fn) mp.observers[name] = fn end
     function api.add_forced_key_binding(_, name, fn) mp.keys[name] = fn end

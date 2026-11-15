@@ -16,6 +16,7 @@ The bundle is the config and scripts for the juxtopposed look in mpv. Two parts 
 | `scripts/juxtopposed-menu.lua` | `~/.config/mpv/scripts/` | `scripts\` |
 | `scripts/juxtopposed-home.lua` | `~/.config/mpv/scripts/` | `scripts\` |
 | `scripts/juxtopposed-start.lua` | `~/.config/mpv/scripts/` | `scripts\` |
+| `bin/juxt-pick-file.py` | `~/.config/mpv/bin/` (make it executable) | `bin\` |
 
 ## Build mpv from this repository
 
@@ -52,8 +53,8 @@ If the bar shows the classic layout, the config or the build is not the one you 
 - `save-watch-history=yes`, `save-position-on-quit=yes` and `write-filename-in-watch-later-config=yes`
   (in `mpv.conf`). Home reads the history and the resume files.
 - `idle=yes` (in `mpv.conf`), so mpv stays open on Home.
-- Open File(s) and Open Folder use `zenity` or `kdialog`, whichever is installed. Without either, the
-  menu shows a message.
+- Open File(s) and Open Folder show the desktop's file chooser, through the xdg desktop portal and
+  `python3` with PyGObject (`bin/juxt-pick-file.py`).
 
 ## Uninstall and go back
 

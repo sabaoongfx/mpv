@@ -121,36 +121,37 @@ local function run(cmd)
     end
 end
 
--- Open a file dialog through zenity or kdialog (mpv has no native dialog). Calls back with paths.
-local function pick(folder, cb)
-    local tries = folder
-        and { { "zenity", "--file-selection", "--directory" }, { "kdialog", "--getexistingdirectory", "." } }
-        or { { "zenity", "--file-selection", "--multiple", "--separator=\n" }, { "kdialog", "--getopenfilename", "." } }
-    for _, args in ipairs(tries) do
-        local probe = utils.subprocess({ args = { "which", args[1] }, playback_only = false })
-        if probe.status == 0 then
-            local res = utils.subprocess({ args = args, playback_only = false })
-            if res.status == 0 and res.stdout then
-                local paths = {}
-                for line in res.stdout:gmatch("[^\r\n]+") do paths[#paths + 1] = line end
-                cb(paths)
-            end
-            return
-        end
+-- Open the desktop's file chooser (xdg portal, via bin/juxt-pick-file.py) and play what is chosen.
+-- It runs asynchronously, so mpv keeps running while the dialog is open.
+local function pick(mode, cb)
+    local helper = mp.find_config_file("bin/juxt-pick-file.py")
+    if not helper then
+        mp.osd_message("File chooser helper not found (install bin/juxt-pick-file.py)")
+        return
     end
-    mp.osd_message("No file dialog found: install zenity or kdialog")
+    mp.command_native_async({
+        name = "subprocess",
+        args = { "python3", helper, mode },
+        capture_stdout = true,
+        playback_only = false,
+    }, function(success, res)
+        if not success or not res or res.status ~= 0 then return end
+        local paths = {}
+        for line in (res.stdout or ""):gmatch("[^\r\n]+") do paths[#paths + 1] = line end
+        if #paths > 0 then cb(paths) end
+    end)
 end
 
 mp.register_script_message("juxt-open-files", function()
-    pick(false, function(paths)
+    pick("file", function(paths)
         for i, p in ipairs(paths) do
             mp.commandv("loadfile", p, i == 1 and "replace" or "append-play")
         end
     end)
 end)
 mp.register_script_message("juxt-open-folder", function()
-    pick(true, function(paths)
-        if paths[1] then mp.commandv("loadfile", paths[1], "replace") end
+    pick("folder", function(paths)
+        mp.commandv("loadfile", paths[1], "replace")
     end)
 end)
 
