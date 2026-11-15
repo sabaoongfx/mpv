@@ -165,7 +165,9 @@ def main():
 
     with open(log, encoding="utf-8", errors="replace") as f:
         lines = f.read().splitlines()
-    errors = [l for l in lines if ("[e]" in l or "[f]" in l or "Lua error" in l or "traceback" in l)]
+    # errors from the OSC and the scripts only; the demuxer reports damage in the media file itself
+    errors = [l for l in lines if ("[e]" in l or "[f]" in l or "Lua error" in l or "traceback" in l)
+              and ("osc" in l or "juxtopposed" in l or "Lua" in l or "traceback" in l)]
     mark("no Lua errors", not errors, errors[0][:160] if errors else "")
     shutil.copy(log, os.path.join(out, "mpv.log"))
 
